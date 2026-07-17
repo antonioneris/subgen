@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="title description">
+  <title id="title">Subgen</title>
+  <desc id="description">Tradução inteligente de legendas direto no terminal</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#090E1A"/>
+      <stop offset="0.55" stop-color="#121A35"/>
+      <stop offset="1" stop-color="#27104D"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#38BDF8"/>
+      <stop offset="0.5" stop-color="#818CF8"/>
+      <stop offset="1" stop-color="#C084FC"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+  </defs>
+  <rect width="1200" height="360" rx="28" fill="url(#background)"/>
+  <circle cx="1030" cy="70" r="170" fill="#7C3AED" opacity=".16" filter="url(#glow)"/>
+  <circle cx="130" cy="330" r="150" fill="#0EA5E9" opacity=".12" filter="url(#glow)"/>
+  <g transform="translate(92 70)">
+    <rect x="0" y="0" width="220" height="220" rx="48" fill="#10182B" stroke="url(#accent)" stroke-width="4"/>
+    <path d="M48 63h124a18 18 0 0 1 18 18v72a18 18 0 0 1-18 18h-57l-35 30v-30H48a18 18 0 0 1-18-18V81a18 18 0 0 1 18-18Z" fill="none" stroke="url(#accent)" stroke-width="10" stroke-linejoin="round"/>
+    <path d="M61 109h98M61 137h70" stroke="#E2E8F0" stroke-width="10" stroke-linecap="round"/>
+  </g>
+  <g transform="translate(370 87)">
+    <text x="0" y="86" fill="#F8FAFC" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="92" font-weight="800" letter-spacing="-3">subgen</text>
+    <rect x="2" y="112" width="470" height="5" rx="3" fill="url(#accent)"/>
+    <text x="2" y="161" fill="#CBD5E1" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="25">Tradução inteligente de legendas</text>
+    <text x="2" y="198" fill="#94A3B8" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="19">MKV · SRT · Plex · Jellyfin · OpenRouter · DeepSeek</text>
+  </g>
+</svg>
