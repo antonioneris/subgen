@@ -45,7 +45,7 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	case "help", "-h", "--help":
 		printHelp(stdout)
 		return nil
-	case "version", "--version":
+	case "version", "--version", "-v":
 		fmt.Fprintf(stdout, "subgen %s\n", version)
 		return nil
 	case "translate":

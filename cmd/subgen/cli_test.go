@@ -148,3 +148,15 @@ func TestAllowPathFirst(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestVersion(t *testing.T) {
+	for _, cmd := range []string{"version", "--version", "-v"} {
+		var out bytes.Buffer
+		if err := run(context.Background(), []string{cmd}, strings.NewReader(""), &out, &out); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.HasPrefix(out.String(), "subgen ") {
+			t.Errorf("command %s output = %q, expected 'subgen <version>'", cmd, out.String())
+		}
+	}
+}
