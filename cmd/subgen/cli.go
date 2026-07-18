@@ -28,6 +28,14 @@ const defaultParallelism = 4
 const defaultTimeout = 15 * time.Minute
 
 func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+	// Tenta limpar arquivos temporários de atualização anterior (.old no Windows)
+	if exePath, err := os.Executable(); err == nil {
+		oldExe := exePath + ".old"
+		if _, err := os.Stat(oldExe); err == nil {
+			_ = os.Remove(oldExe)
+		}
+	}
+
 	if len(args) == 0 {
 		printHelp(stdout)
 		return nil
@@ -48,6 +56,8 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		return runInspect(ctx, service, args[1:], stderr)
 	case "config":
 		return runConfig(args[1:], stdin, stdout, stderr)
+	case "update":
+		return runUpdate(ctx, stdout, stderr)
 	default:
 		return fmt.Errorf("comando desconhecido %q; use 'subgen help'", args[0])
 	}
@@ -482,6 +492,7 @@ USO
   subgen info <arquivo-ou-pasta>
   subgen inspect <vídeo-ou-pasta>
   subgen config
+  subgen update
 
 EXEMPLOS
   subgen translate filme.srt --to pt-BR --dry-run
@@ -490,6 +501,7 @@ EXEMPLOS
   subgen inspect filme.mkv
   subgen translate filme.mkv --to pt-BR --track 2
   subgen config
+  subgen update
 
 CONFIGURAÇÃO
   'subgen config' abre um assistente guiado e salva tudo com acesso restrito.
