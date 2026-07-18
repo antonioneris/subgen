@@ -61,7 +61,25 @@ jobs:
           tar -xzf dist/subgen_linux_amd64.tar.gz -C /tmp/subgen-smoke
           test "$(/tmp/subgen-smoke/subgen version)" = "subgen ${GITHUB_REF_NAME#v}"
 
+      - name: Generate Changelog
+        run: |
+          git fetch --tags --force
+          prev_tag=$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          echo "## O que mudou nesta versão" > changelog.md
+          echo "" >> changelog.md
+          if [ -n "$prev_tag" ]; then
+            echo "Comparando com a versão anterior: \`$prev_tag\`" >> changelog.md
+            echo "" >> changelog.md
+            git log "${prev_tag}..${GITHUB_REF_NAME}" --pretty=format:"* %s (%h)" >> changelog.md
+            echo "" >> changelog.md
+            echo "" >> changelog.md
+            echo "**Changelog completo**: https://github.com/${{ github.repository }}/compare/${prev_tag}...${GITHUB_REF_NAME}" >> changelog.md
+          else
+            git log --pretty=format:"* %s (%h)" >> changelog.md
+          fi
+          cat changelog.md
+
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/* --generate-notes --verify-tag
+        run: gh release create "$GITHUB_REF_NAME" dist/* -F changelog.md --verify-tag
