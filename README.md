@@ -5,7 +5,7 @@
 <div align="center">
 
 [![Release](https://img.shields.io/github/v/release/antonioneris/subgen?style=flat-square&color=8b5cf6)](https://github.com/antonioneris/subgen/releases/latest)
-[![CI](https://img.shields.io/github/actions/workflow/status/antonioneris/subgen/ci.yml?branch=main&style=flat-square&label=build)](https://github.com/antonioneris/subgen/actions/workflows/ci.yml)
+[![CI](https://github.com/antonioneris/subgen/actions/workflows/ci.yml/badge.svg)](https://github.com/antonioneris/subgen/actions/workflows/ci.yml)
 [![Go](https://img.shields.io/badge/Go-1.24-00ADD8?style=flat-square&logo=go&logoColor=white)](https://go.dev/)
 [![Platforms](https://img.shields.io/badge/macOS%20%C2%B7%20Linux%20%C2%B7%20Windows-available-22c55e?style=flat-square)](#instalação)
 [![License](https://img.shields.io/badge/license-MIT-f59e0b?style=flat-square)](LICENSE)
