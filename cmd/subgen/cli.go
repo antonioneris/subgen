@@ -17,7 +17,7 @@ import (
 	terminalui "github.com/antonioneris/subgen/internal/ui"
 )
 
-var version = "0.17.0"
+var version = "0.17.1"
 
 const defaultProvider = "deepseek"
 const defaultModel = "deepseek-v4-flash"

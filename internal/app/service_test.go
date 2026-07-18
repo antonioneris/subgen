@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/antonioneris/subgen/internal/media"
+	"github.com/antonioneris/subgen/internal/openrouter"
 	"github.com/antonioneris/subgen/internal/subtitle"
 )
 
@@ -79,6 +80,14 @@ func TestTargetSubtitleFindsOnlySameMediaSidecarAndEmbeddedLanguage(t *testing.T
 	tracks := []media.SubtitleTrack{{Index: 4, Language: "por", Codec: "subrip"}}
 	if found, source := targetSubtitle(mediaPath, tracks, "pt-BR"); !found || !strings.Contains(source, "faixa 4") {
 		t.Fatalf("found=%v source=%q", found, source)
+	}
+}
+
+func TestInfoSkipsUnreadableMediaWhenExternalTargetIsAlreadyIndexed(t *testing.T) {
+	missingMedia := filepath.Join(t.TempDir(), "missing.mkv")
+	row, totals := inspectMediaForInfo(context.Background(), missingMedia, Options{Target: "pt-BR"}, openrouter.ModelPricing{}, false, "externa · pt")
+	if row.Status != "✓ pronta" || totals.ready != 1 || totals.failed != 0 {
+		t.Fatalf("row=%#v totals=%#v", row, totals)
 	}
 }
 

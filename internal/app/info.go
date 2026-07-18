@@ -23,6 +23,12 @@ type infoTotals struct {
 	costUSD                             float64
 }
 
+type infoResult struct {
+	index  int
+	row    terminalui.InfoRow
+	totals infoTotals
+}
+
 var episodeCode = regexp.MustCompile(`(?i)S\d{1,2}E\d{1,3}`)
 
 // Info performs a read-only inventory. It uses ffprobe and temporary subtitle
@@ -42,11 +48,14 @@ func (s Service) Info(ctx context.Context, path string, opts Options) error {
 	if len(files) == 0 {
 		return fmt.Errorf("nenhuma mídia compatível encontrada em %q", path)
 	}
+	externalTargets := indexTargetSidecars(files, opts.Target)
 
 	var pricing openrouter.ModelPricing
 	pricingKnown := false
 	var pricingWarning error
-	if strings.EqualFold(opts.Provider, openrouter.ProviderOpenRouter) {
+	// A fully covered library needs no cost forecast, so avoid even the small
+	// pricing request in the most common repeated-scan case.
+	if len(externalTargets) < len(files) && strings.EqualFold(opts.Provider, openrouter.ProviderOpenRouter) {
 		pricing, pricingWarning = (&openrouter.Client{
 			APIKey: opts.APIKey, Model: opts.Model, ProviderName: opts.Provider, HTTP: opts.HTTPClient,
 		}).FetchModelPricing(ctx)
@@ -56,25 +65,42 @@ func (s Service) Info(ctx context.Context, path string, opts Options) error {
 	fmt.Fprintln(s.Out, styles.Title.Render("◆ SUBGEN · Diagnóstico da biblioteca"))
 	fmt.Fprintf(s.Out, "  %s\n", styles.Muted.Render(fmt.Sprintf("%d mídia(s) · destino %s · origens %s · %s / %s", len(files), opts.Target, language.FormatOrdered(opts.SourceLanguages), providerDisplayName(opts.Provider), opts.Model)))
 
-	rows := make([]terminalui.InfoRow, 0, len(files))
+	rows := make([]terminalui.InfoRow, len(files))
 	totals := infoTotals{}
 	scanErr := terminalui.RunTask(ctx, s.Out, styles.Accent.Render("analisando mídias e legendas"), len(files), func(report func(int, int)) error {
-		for index, file := range files {
-			if err := ctx.Err(); err != nil {
-				return err
+		workCtx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		workers := min(max(opts.Parallelism, 1), min(len(files), 8))
+		jobs := make(chan int)
+		results := make(chan infoResult, workers)
+		for range workers {
+			go func() {
+				for index := range jobs {
+					file := files[index]
+					row, result := inspectMediaForInfo(workCtx, file, opts, pricing, pricingKnown, externalTargets[file])
+					results <- infoResult{index: index, row: row, totals: result}
+				}
+			}()
+		}
+		go func() {
+			defer close(jobs)
+			for index := range files {
+				select {
+				case jobs <- index:
+				case <-workCtx.Done():
+					return
+				}
 			}
-			row, result := inspectMediaForInfo(ctx, file, opts, pricing, pricingKnown)
-			rows = append(rows, row)
-			totals.ready += result.ready
-			totals.pending += result.pending
-			totals.unavailable += result.unavailable
-			totals.failed += result.failed
-			totals.cues += result.cues
-			totals.promptTokens += result.promptTokens
-			totals.outputTokens += result.outputTokens
-			totals.requests += result.requests
-			totals.costUSD += result.costUSD
-			report(index+1, 0)
+		}()
+		for completed := 1; completed <= len(files); completed++ {
+			select {
+			case result := <-results:
+				rows[result.index] = result.row
+				totals.add(result.totals)
+				report(completed, 0)
+			case <-workCtx.Done():
+				return workCtx.Err()
+			}
 		}
 		return nil
 	})
@@ -89,7 +115,9 @@ func (s Service) Info(ctx context.Context, path string, opts Options) error {
 	if totals.unavailable > 0 || totals.failed > 0 {
 		fmt.Fprintf(s.Out, "%s\n", styles.Warning.Render(fmt.Sprintf("↷ %d sem fonte configurada · %d com erro de leitura", totals.unavailable, totals.failed)))
 	}
-	if pricingKnown {
+	if totals.pending == 0 {
+		fmt.Fprintf(s.Out, "%s\n", styles.Muted.Render("$ Nenhum custo previsto: a biblioteca já está coberta"))
+	} else if pricingKnown {
 		fmt.Fprintf(s.Out, "%s\n", styles.Title.Render(fmt.Sprintf("$ Estimativa OpenRouter: %s", formatUSD(totals.costUSD))))
 		fmt.Fprintf(s.Out, "  %s\n", styles.Muted.Render("estimativa; o total real varia com o tamanho da resposta e o provedor escolhido pelo roteamento"))
 	} else if strings.EqualFold(opts.Provider, openrouter.ProviderOpenRouter) {
@@ -103,14 +131,30 @@ func (s Service) Info(ctx context.Context, path string, opts Options) error {
 	return nil
 }
 
-func inspectMediaForInfo(ctx context.Context, file string, opts Options, pricing openrouter.ModelPricing, pricingKnown bool) (terminalui.InfoRow, infoTotals) {
+func (totals *infoTotals) add(other infoTotals) {
+	totals.ready += other.ready
+	totals.pending += other.pending
+	totals.unavailable += other.unavailable
+	totals.failed += other.failed
+	totals.cues += other.cues
+	totals.promptTokens += other.promptTokens
+	totals.outputTokens += other.outputTokens
+	totals.requests += other.requests
+	totals.costUSD += other.costUSD
+}
+
+func inspectMediaForInfo(ctx context.Context, file string, opts Options, pricing openrouter.ModelPricing, pricingKnown bool, externalTarget string) (terminalui.InfoRow, infoTotals) {
 	row := terminalui.InfoRow{Media: infoMediaName(file), Cues: "—", Tokens: "—", Calls: "—", Cost: "—"}
+	if externalTarget != "" {
+		row.Status, row.Source = "✓ pronta", externalTarget
+		return row, infoTotals{ready: 1}
+	}
 	tracks, err := media.Probe(ctx, file)
 	if err != nil {
 		row.Status, row.Source = "! erro", shortInfoError(err)
 		return row, infoTotals{failed: 1}
 	}
-	if found, source := targetSubtitle(file, tracks, opts.Target); found {
+	if found, source := embeddedTargetSubtitle(tracks, opts.Target); found {
 		row.Status, row.Source = "✓ pronta", source
 		return row, infoTotals{ready: 1}
 	}
@@ -156,21 +200,56 @@ func inspectMediaForInfo(ctx context.Context, file string, opts Options, pricing
 }
 
 func targetSubtitle(mediaPath string, tracks []media.SubtitleTrack, target string) (bool, string) {
-	base := strings.TrimSuffix(filepath.Base(mediaPath), filepath.Ext(mediaPath))
 	entries, _ := os.ReadDir(filepath.Dir(mediaPath))
-	for _, entry := range entries {
-		name := entry.Name()
-		if entry.IsDir() || !strings.EqualFold(filepath.Ext(name), ".srt") || !strings.HasPrefix(strings.ToLower(name), strings.ToLower(base)+".") {
-			continue
-		}
-		if isTargetSidecar(name, target) {
-			return true, "externa · " + plexLanguageCode(target)
-		}
+	if found, source := externalTargetSubtitle(mediaPath, entries, target); found {
+		return true, source
 	}
+	return embeddedTargetSubtitle(tracks, target)
+}
+
+func embeddedTargetSubtitle(tracks []media.SubtitleTrack, target string) (bool, string) {
 	canonicalTarget := language.Canonical(target)
 	for _, track := range tracks {
 		if language.Canonical(track.Language) == canonicalTarget {
 			return true, fmt.Sprintf("embutida · faixa %d · %s", track.Index, canonicalTarget)
+		}
+	}
+	return false, ""
+}
+
+// indexTargetSidecars reads each media directory only once. On SMB/NFS this
+// avoids one network round trip per video and lets covered media skip ffprobe.
+func indexTargetSidecars(files []string, target string) map[string]string {
+	byDirectory := make(map[string][]string)
+	for _, file := range files {
+		directory := filepath.Dir(file)
+		byDirectory[directory] = append(byDirectory[directory], file)
+	}
+	found := make(map[string]string)
+	for directory, mediaFiles := range byDirectory {
+		entries, err := os.ReadDir(directory)
+		if err != nil {
+			continue
+		}
+		for _, file := range mediaFiles {
+			if ok, source := externalTargetSubtitle(file, entries, target); ok {
+				found[file] = source
+			}
+		}
+	}
+	return found
+}
+
+func externalTargetSubtitle(mediaPath string, entries []os.DirEntry, target string) (bool, string) {
+	base := strings.TrimSuffix(filepath.Base(mediaPath), filepath.Ext(mediaPath))
+	prefix := strings.ToLower(base) + "."
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.EqualFold(filepath.Ext(name), ".srt") || !strings.HasPrefix(strings.ToLower(name), prefix) {
+			continue
+		}
+		if isTargetSidecar(name, target) {
+			return true, "externa · " + plexLanguageCode(target)
 		}
 	}
 	return false, ""
