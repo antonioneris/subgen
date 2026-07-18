@@ -185,6 +185,11 @@ func (s Service) Translate(ctx context.Context, path string, opts Options) error
 			skipped++
 			continue
 		}
+		if found, source := embeddedTargetSubtitle(tracks, opts.Target); found {
+			fmt.Fprintf(s.Out, "%s %s\n", styles.Success.Render("✓ já existe embutida"), styles.Muted.Render(fmt.Sprintf("%s · %s", file, source)))
+			skipped++
+			continue
+		}
 		if len(textSubtitleTracks(tracks)) == 0 {
 			message := fmt.Sprintf("%s: só possui legendas gráficas; OCR necessário", file)
 			if len(files) == 1 {

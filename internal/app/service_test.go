@@ -82,6 +82,22 @@ func TestTargetSubtitleFindsOnlySameMediaSidecarAndEmbeddedLanguage(t *testing.T
 	}
 }
 
+func TestEmbeddedTargetSubtitleRecognizesConfiguredDestinationAliases(t *testing.T) {
+	tracks := []media.SubtitleTrack{
+		{Index: 2, Language: "eng", Codec: "subrip"},
+		{Index: 5, Language: "por", Codec: "ass", Title: "Português Brasil"},
+	}
+	for _, target := range []string{"pt", "pt-BR", "por"} {
+		found, source := embeddedTargetSubtitle(tracks, target)
+		if !found || !strings.Contains(source, "faixa 5") {
+			t.Fatalf("target=%q found=%v source=%q", target, found, source)
+		}
+	}
+	if found, _ := embeddedTargetSubtitle(tracks, "fr"); found {
+		t.Fatal("unrelated destination was incorrectly detected")
+	}
+}
+
 func TestInfoSkipsUnreadableMediaWhenExternalTargetIsAlreadyIndexed(t *testing.T) {
 	missingMedia := filepath.Join(t.TempDir(), "missing.mkv")
 	row, totals := inspectMediaForInfo(context.Background(), missingMedia, Options{Target: "pt-BR"}, openrouter.ModelPricing{}, false, "externa · pt")

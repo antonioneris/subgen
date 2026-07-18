@@ -63,6 +63,7 @@ flowchart LR
 - Traduz `.srt`, uma mídia individual ou uma biblioteca inteira.
 - Extrai legendas textuais embutidas em MKV, MP4, M4V, MOV, AVI, WebM e TS.
 - Usa uma lista ordenada de idiomas de origem, como `en → fr → ja`.
+- Ignora a mídia quando o idioma de destino já existe como sidecar ou faixa embutida.
 - Prefere faixas `Full/Complete`, evita `Forced` e rebaixa SDH/CC automaticamente.
 - Consolida milhares de quadros repetidos e desenhos gerados por efeitos ASS.
 - Usa DeepSeek direto ou qualquer modelo compatível disponível no OpenRouter.
