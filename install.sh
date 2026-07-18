@@ -57,6 +57,55 @@ else
     bin_dir=/usr/local/bin
 fi
 
+add_to_path() {
+    local target_dir="$1"
+    local shell_name
+    shell_name=$(basename "${SHELL:-sh}")
+    local rc_file=""
+
+    case "$shell_name" in
+        zsh)  rc_file="$HOME/.zshrc" ;;
+        bash) 
+            if [ "$os" = darwin ]; then
+                rc_file="$HOME/.bash_profile"
+            else
+                rc_file="$HOME/.bashrc"
+            fi
+            ;;
+        *)    rc_file="$HOME/.profile" ;;
+    esac
+
+    if [ ! -f "$rc_file" ]; then
+        if [ -f "$HOME/.zshrc" ]; then
+            rc_file="$HOME/.zshrc"
+        elif [ -f "$HOME/.bashrc" ]; then
+            rc_file="$HOME/.bashrc"
+        elif [ -f "$HOME/.profile" ]; then
+            rc_file="$HOME/.profile"
+        else
+            rc_file="$HOME/.profile"
+            touch "$rc_file"
+        fi
+    fi
+
+    local export_line="export PATH=\"\$PATH:${target_dir}\""
+
+    if grep -qF "${target_dir}" "$rc_file" 2>/dev/null; then
+        say "O diretório ${target_dir} já está configurado no seu PATH em ${rc_file}."
+    else
+        say "Adicionando ${target_dir} ao PATH em ${rc_file} automaticamente..."
+        printf "\n# subgen PATH\n%s\n" "$export_line" >> "$rc_file"
+    fi
+
+    say ""
+    say "⚠ Para começar a usar o subgen imediatamente nesta janela do terminal, execute:"
+    if [ "$shell_name" = "zsh" ] || [ "$shell_name" = "bash" ]; then
+        say "  source ${rc_file}"
+    else
+        say "  export PATH=\"\$PATH:${target_dir}\""
+    fi
+}
+
 try_install() {
     local target_dir="$1"
     local dest="${target_dir}/subgen"
@@ -87,10 +136,7 @@ else
         case ":${PATH}:" in
             *:"${user_bin_dir}":*) ;;
             *)
-                say ""
-                say "⚠ AVISO: ${user_bin_dir} não está no seu PATH."
-                say "Para poder executar o subgen de qualquer lugar, adicione a seguinte linha ao seu ~/.bashrc, ~/.zshrc ou perfil do terminal:"
-                say "  export PATH=\"\$PATH:${user_bin_dir}\""
+                add_to_path "$user_bin_dir"
                 ;;
         esac
     else
