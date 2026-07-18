@@ -34,11 +34,61 @@ func Path() (string, error) {
 	if custom := strings.TrimSpace(os.Getenv("SUBGEN_CONFIG_PATH")); custom != "" {
 		return filepath.Abs(custom)
 	}
-	base, err := os.UserConfigDir()
-	if err != nil {
-		return "", fmt.Errorf("localizar diretório de configuração: %w", err)
+
+	// 1. Coleta todos os caminhos candidatos
+	var candidates []string
+
+	// Candidato 1: Diretório de configuração padrão do usuário
+	if base, err := os.UserConfigDir(); err == nil {
+		candidates = append(candidates, filepath.Join(base, "subgen", filename))
 	}
-	return filepath.Join(base, "subgen", filename), nil
+
+	// Candidato 2: Pasta .config no Home do usuário (caso UserConfigDir retorne algo diferente/inválido)
+	if home, err := os.UserHomeDir(); err == nil {
+		candidates = append(candidates, filepath.Join(home, ".config", "subgen", filename))
+		candidates = append(candidates, filepath.Join(home, ".subgen", filename))
+	}
+
+	// Candidato 3: Diretório do próprio executável (como fallback absoluto)
+	if exePath, err := os.Executable(); err == nil {
+		candidates = append(candidates, filepath.Join(filepath.Dir(exePath), "subgen_config.json"))
+	}
+
+	// 2. Primeiro passo: se o arquivo de configuração já existe em algum dos candidatos, usa ele!
+	// (Isso garante compatibilidade com configurações salvas anteriormente)
+	for _, path := range candidates {
+		if _, err := os.Stat(path); err == nil {
+			return path, nil
+		}
+	}
+
+	// 3. Segundo passo: se não existe, escolhe o primeiro cuja pasta de destino seja gravável
+	for _, path := range candidates {
+		dir := filepath.Dir(path)
+		if isWritable(dir) {
+			return path, nil
+		}
+	}
+
+	// Se nenhum for gravável (caso extremo), retorna o primeiro candidato da lista como padrão
+	if len(candidates) > 0 {
+		return candidates[0], nil
+	}
+
+	return "", errors.New("nenhum diretório de configuração gravável foi encontrado")
+}
+
+func isWritable(dir string) bool {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return false
+	}
+	f, err := os.CreateTemp(dir, ".write-test-*")
+	if err != nil {
+		return false
+	}
+	f.Close()
+	_ = os.Remove(f.Name())
+	return true
 }
 
 func Load(path string) (Config, error) {
