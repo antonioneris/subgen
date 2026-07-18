@@ -56,22 +56,46 @@ if [ "$os" = darwin ] && command -v brew >/dev/null 2>&1; then
 else
     bin_dir=/usr/local/bin
 fi
-destination="${bin_dir}/subgen"
-staged_destination="${destination}.new.$$"
 
-if [ "$(id -u)" -eq 0 ]; then
-    mkdir -p "$bin_dir"
-    install -m 0755 "${temp_dir}/subgen" "$staged_destination"
-    mv "$staged_destination" "$destination"
-elif [ -d "$bin_dir" ] && [ -w "$bin_dir" ]; then
-    install -m 0755 "${temp_dir}/subgen" "$staged_destination"
-    mv "$staged_destination" "$destination"
+try_install() {
+    local target_dir="$1"
+    local dest="${target_dir}/subgen"
+    local staged="${dest}.new.$$"
+
+    if [ "$(id -u)" -eq 0 ] || { [ -d "$target_dir" ] && [ -w "$target_dir" ]; }; then
+        mkdir -p "$target_dir" && \
+        install -m 0755 "${temp_dir}/subgen" "$staged" && \
+        mv "$staged" "$dest"
+    else
+        if command -v sudo >/dev/null 2>&1; then
+            sudo mkdir -p "$target_dir" && \
+            sudo install -m 0755 "${temp_dir}/subgen" "$staged" && \
+            sudo mv "$staged" "$dest"
+        else
+            return 1
+        fi
+    fi
+}
+
+if try_install "$bin_dir"; then
+    destination="${bin_dir}/subgen"
 else
-    command -v sudo >/dev/null 2>&1 || fail "sudo é necessário para instalar permanentemente em ${bin_dir}"
-    say "A instalação permanente precisa da senha de administrador."
-    sudo mkdir -p "$bin_dir"
-    sudo install -m 0755 "${temp_dir}/subgen" "$staged_destination"
-    sudo mv "$staged_destination" "$destination"
+    say "Não foi possível gravar em ${bin_dir} (pode ser um sistema de arquivos somente leitura como ZimaOS/SteamOS ou falta de permissão)."
+    user_bin_dir="${HOME}/.local/bin"
+    if try_install "$user_bin_dir"; then
+        destination="${user_bin_dir}/subgen"
+        case ":${PATH}:" in
+            *:"${user_bin_dir}":*) ;;
+            *)
+                say ""
+                say "⚠ AVISO: ${user_bin_dir} não está no seu PATH."
+                say "Para poder executar o subgen de qualquer lugar, adicione a seguinte linha ao seu ~/.bashrc, ~/.zshrc ou perfil do terminal:"
+                say "  export PATH=\"\$PATH:${user_bin_dir}\""
+                ;;
+        esac
+    else
+        fail "não foi possível instalar o subgen em nenhum dos diretórios disponíveis (/usr/local/bin ou ~/.local/bin)"
+    fi
 fi
 
 install_ffmpeg() {
