@@ -160,6 +160,11 @@ subgen info /caminho/da/biblioteca
 
 O relatório é somente leitura. Ele identifica o que já está pronto e calcula a fonte, falas, tokens, chamadas e custo estimado do restante, sem executar traduções.
 
+Para manter a varredura rápida até em NAS/SMB, o Subgen lê cada diretório uma
+única vez e reconhece sidecars antes de abrir o vídeo. Mídias já cobertas não
+executam FFprobe nem FFmpeg; as mídias pendentes são analisadas em paralelo de
+acordo com `--parallel`.
+
 ```text
 ╭─────────────┬──────────────────────────┬─────────────────────────┬───────┬────────────┬──────────┬──────────────╮
 │ Status      │ Mídia                    │ Fonte                   │ Falas │ Tokens E/S │ Chamadas │ Estimativa   │
