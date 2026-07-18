@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -310,7 +309,7 @@ func TestChooseTrackUsesOrderedSourceFallbackAndPrefersFullTrack(t *testing.T) {
 	}
 }
 
-func TestChooseTrackTreatsENMAsEnglishAndSkipsWhenFallbackMissing(t *testing.T) {
+func TestChooseTrackTreatsENMAsEnglishAndUsesAnyLanguageAsFinalFallback(t *testing.T) {
 	chosen, err := chooseTrack(context.Background(), "episode.mkv", []media.SubtitleTrack{
 		{Index: 2, Language: "enm", Codec: "ass", Title: "Honorific"},
 		{Index: 3, Language: "jpn", Codec: "ass"},
@@ -319,10 +318,20 @@ func TestChooseTrackTreatsENMAsEnglishAndSkipsWhenFallbackMissing(t *testing.T) 
 		t.Fatalf("chosen=%#v error=%v", chosen, err)
 	}
 
-	_, err = chooseTrack(context.Background(), "Italian only.mkv", []media.SubtitleTrack{{Index: 3, Language: "ita", Codec: "ass"}}, Options{Track: -1, SourceLanguages: []string{"en", "fr"}}, nil)
-	var unavailable *sourceTrackUnavailableError
-	if !errors.As(err, &unavailable) {
-		t.Fatalf("error = %v", err)
+	chosen, err = chooseTrack(context.Background(), "Italian only.mkv", []media.SubtitleTrack{{Index: 3, Language: "ita", Codec: "ass"}}, Options{Track: -1, SourceLanguages: []string{"en", "fr"}}, nil)
+	if err != nil || chosen.Index != 3 {
+		t.Fatalf("chosen=%#v error=%v", chosen, err)
+	}
+}
+
+func TestChooseTrackAutomaticFallbackPrefersCompleteTrackInAnyLanguage(t *testing.T) {
+	chosen, err := chooseTrack(context.Background(), "movie.mkv", []media.SubtitleTrack{
+		{Index: 2, Language: "ita", Codec: "subrip", Title: "Forced ITA", Forced: true},
+		{Index: 3, Language: "deu", Codec: "subrip", Title: "German SDH", HearingImpaired: true},
+		{Index: 4, Language: "spa", Codec: "subrip", Title: "Spanish Full"},
+	}, Options{Track: -1, SourceLanguages: []string{"en", "fr"}}, nil)
+	if err != nil || chosen.Index != 4 {
+		t.Fatalf("chosen=%#v error=%v", chosen, err)
 	}
 }
 

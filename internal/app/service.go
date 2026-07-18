@@ -92,6 +92,10 @@ func (s Service) Translate(ctx context.Context, path string, opts Options) error
 	var completed, skipped int
 	var failures []error
 	var totalUsage openrouter.Usage
+	recordFailure := func(failure error) {
+		failures = append(failures, failure)
+		fmt.Fprintf(s.Err, "%s %s\n", styles.Error.Render("✗ Falha"), failure)
+	}
 	preferences := make(map[string]*trackPreference)
 	for _, file := range files {
 		if err := ctx.Err(); err != nil {
@@ -169,36 +173,61 @@ func (s Service) Translate(ctx context.Context, path string, opts Options) error
 		}
 		tracks, err := media.Probe(ctx, file)
 		if err != nil {
-			return err
+			failure := fmt.Errorf("%s: %w", file, err)
+			if len(files) == 1 {
+				return failure
+			}
+			recordFailure(failure)
+			continue
 		}
 		if len(tracks) == 0 {
 			fmt.Fprintf(s.Err, "↷ %s: sem legendas embutidas\n", file)
 			skipped++
 			continue
 		}
+		if len(textSubtitleTracks(tracks)) == 0 {
+			message := fmt.Sprintf("%s: só possui legendas gráficas; OCR necessário", file)
+			if len(files) == 1 {
+				return errors.New(message)
+			}
+			fmt.Fprintf(s.Err, "%s\n", styles.Warning.Render("↷ "+message))
+			skipped++
+			continue
+		}
 		preferenceKey := filepath.Dir(file)
 		track, err := chooseTrack(ctx, file, tracks, opts, preferences[preferenceKey])
 		if err != nil {
-			var unavailable *sourceTrackUnavailableError
-			if errors.As(err, &unavailable) && len(files) > 1 {
-				fmt.Fprintf(s.Err, "↷ %s: %s\n", file, unavailable)
-				skipped++
-				continue
+			failure := fmt.Errorf("%s: %w", file, err)
+			if len(files) == 1 {
+				return failure
 			}
-			return err
+			recordFailure(failure)
+			continue
 		}
 		if opts.Track < 0 {
 			preferences[preferenceKey] = rememberTrackPreference(preferences[preferenceKey], track, len(textSubtitleTracks(tracks)))
 		}
-		if priority, total := sourcePriority(track.Language, opts.SourceLanguages); priority > 0 {
-			detail := fmt.Sprintf("%s · automática · %s · prioridade %d/%d", mediaDisplayTitle(file), language.Canonical(track.Language), priority, total)
+		priority, total := sourcePriority(track.Language, opts.SourceLanguages)
+		if priority > 0 || len(opts.SourceLanguages) > 0 {
+			detail := fmt.Sprintf("%s · automática · %s", mediaDisplayTitle(file), language.Canonical(track.Language))
+			if priority > 0 {
+				detail += fmt.Sprintf(" · prioridade %d/%d", priority, total)
+			} else {
+				detail += " · fallback fora das prioridades"
+			}
 			if track.Title != "" {
 				detail += " · " + track.Title
 			}
 			fmt.Fprintln(s.Out, styles.Accent.Render(detail))
 		}
 		if isBitmapSubtitle(track.Codec) {
-			return fmt.Errorf("%s faixa %d (%s): legenda gráfica requer OCR", file, track.Index, track.Codec)
+			message := fmt.Sprintf("%s faixa %d (%s): legenda gráfica requer OCR", file, track.Index, track.Codec)
+			if len(files) == 1 {
+				return errors.New(message)
+			}
+			fmt.Fprintf(s.Err, "%s\n", styles.Warning.Render("↷ "+message))
+			skipped++
+			continue
 		}
 		legacy := legacySidecarName(file, opts.Target, track.Index)
 		if !opts.Overwrite {
@@ -221,18 +250,31 @@ func (s Service) Translate(ctx context.Context, path string, opts Options) error
 		}
 		tmp, err := os.CreateTemp("", "subgen-extracted-*.srt")
 		if err != nil {
-			return err
+			failure := fmt.Errorf("%s: criar arquivo temporário: %w", file, err)
+			if len(files) == 1 {
+				return failure
+			}
+			recordFailure(failure)
+			continue
 		}
 		tmpPath := tmp.Name()
 		_ = tmp.Close()
 		defer os.Remove(tmpPath)
 		if err := media.ExtractSRT(ctx, file, track.Index, tmpPath); err != nil {
-			return err
+			_ = os.Remove(tmpPath)
+			failure := fmt.Errorf("%s faixa %d: %w", file, track.Index, err)
+			if len(files) == 1 {
+				return failure
+			}
+			recordFailure(failure)
+			continue
 		}
 		fileOpts := opts
 		fileOpts.NormalizeEffects = true
-		if detected := language.Canonical(track.Language); detected != "" {
+		if detected := language.Canonical(track.Language); detected != "" && priority > 0 {
 			fileOpts.Source = detected
+		} else {
+			fileOpts.Source = "auto"
 		}
 		displayName := fmt.Sprintf("%s · faixa %d (%s → %s)", file, track.Index, fileOpts.Source, fileOpts.Target)
 		ok, usage, err := s.translateSRT(ctx, client, tmpPath, output, displayName, fileOpts)
@@ -267,12 +309,6 @@ type trackPreference struct {
 	Language, Title string
 }
 
-type sourceTrackUnavailableError struct{ languages []string }
-
-func (e *sourceTrackUnavailableError) Error() string {
-	return "nenhuma faixa encontrada nos idiomas configurados: " + language.FormatOrdered(e.languages)
-}
-
 // rememberTrackPreference keeps the user's choice across a folder. An episode
 // with only one textual track is not a choice and must not replace it.
 func rememberTrackPreference(current *trackPreference, selected media.SubtitleTrack, candidateCount int) *trackPreference {
@@ -299,11 +335,10 @@ func chooseTrack(ctx context.Context, path string, tracks []media.SubtitleTrack,
 	if len(sourceLanguages) == 0 && !strings.EqualFold(strings.TrimSpace(opts.Source), "auto") && strings.TrimSpace(opts.Source) != "" {
 		sourceLanguages = []string{language.Canonical(opts.Source)}
 	}
-	fallbackToManual := len(sourceLanguages) == 0
+	useAutomaticFallback := len(sourceLanguages) > 0
 	for _, preferredLanguage := range sourceLanguages {
 		preferredLanguage = language.Canonical(preferredLanguage)
 		if preferredLanguage == "auto" {
-			fallbackToManual = true
 			continue
 		}
 		var matches []media.SubtitleTrack
@@ -316,8 +351,20 @@ func chooseTrack(ctx context.Context, path string, tracks []media.SubtitleTrack,
 			return bestSourceTrack(matches), nil
 		}
 	}
-	if len(sourceLanguages) > 0 && !fallbackToManual {
-		return media.SubtitleTrack{}, &sourceTrackUnavailableError{languages: sourceLanguages}
+	if useAutomaticFallback {
+		// The ordered list is a preference, not a hard filter. Translation
+		// models can detect the source language, so never discard a usable
+		// textual subtitle merely because its metadata is outside the list.
+		complete := make([]media.SubtitleTrack, 0, len(textTracks))
+		for _, track := range textTracks {
+			if !isForcedTrack(track) {
+				complete = append(complete, track)
+			}
+		}
+		if len(complete) > 0 {
+			return bestSourceTrack(complete), nil
+		}
+		return bestSourceTrack(textTracks), nil
 	}
 	if preferred != nil {
 		for _, track := range textTracks {

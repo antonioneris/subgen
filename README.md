@@ -260,7 +260,7 @@ Para cada vídeo, o Subgen:
 4. Traduz somente a primeira opção encontrada.
 5. Segue imediatamente para o próximo vídeo.
 
-Entre várias faixas do mesmo idioma, a preferência é `Full/Complete`, depois a versão comum e por último SDH/CC. Faixas `Forced` não são consideradas legendas completas. Adicione `auto` ao final da lista se quiser abrir o seletor visual quando nenhum idioma preferido estiver disponível.
+Entre várias faixas do mesmo idioma, a preferência é `Full/Complete`, depois a versão comum e por último SDH/CC. Faixas `Forced` não são consideradas legendas completas. Se nenhum idioma da lista existir, a melhor faixa textual de qualquer idioma será usada automaticamente e a IA detectará a origem. Use `auto` sozinho quando não quiser definir prioridades.
 
 ## Plex, Jellyfin e nomes de arquivos
 
@@ -315,7 +315,7 @@ Variáveis opcionais para ambientes efêmeros ou automações:
 
 ## Automação e servidores
 
-Execute `subgen config` uma vez com o mesmo usuário do serviço. Para execução não interativa, configure origens explícitas, como `en,fr,ja`, sem `auto`.
+Execute `subgen config` uma vez com o mesmo usuário do serviço. A seleção é segura para execução não interativa: a lista, como `en,fr,ja`, define prioridades e qualquer outra faixa textual funciona como fallback final.
 
 ### Cron no Linux
 
@@ -343,7 +343,7 @@ O usuário do cron precisa ler os vídeos, escrever nas respectivas pastas e ace
 | Contêineres de mídia | MKV, MP4, M4V, MOV, AVI, WebM, TS | ✅ |
 | Legendas gráficas | PGS, VobSub, DVB, XSUB | ⚠️ Requer OCR |
 
-Legendas gráficas são imagens. O Subgen as identifica no `inspect`, mas não finge que consegue traduzi-las como texto. OCR assistido está no roadmap.
+Legendas gráficas são imagens. O Subgen as identifica no `inspect`, mas não finge que consegue traduzi-las como texto. Ao processar uma pasta, a mídia é ignorada com um aviso e o fluxo continua nos próximos arquivos. OCR assistido está no roadmap.
 
 ## Segurança e privacidade
 
@@ -402,7 +402,7 @@ Observe as métricas de primeiro trecho e velocidade. Teste `--parallel 6` ou `-
 <details>
 <summary><strong>Nenhuma faixa foi encontrada no idioma configurado</strong></summary>
 
-Use `subgen inspect filme.mkv` para conferir os idiomas e depois ajuste a lista em `subgen config`. Para fallback manual, coloque `auto` no final.
+Use `subgen inspect filme.mkv` para conferir os idiomas. Se nenhuma prioridade estiver presente, o Subgen usa automaticamente a melhor faixa textual de outro idioma. Se houver apenas PGS/VobSub ou outro formato gráfico, essa mídia exigirá OCR e será ignorada durante a varredura da pasta.
 
 </details>
 

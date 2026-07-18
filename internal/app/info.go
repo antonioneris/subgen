@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -161,12 +160,7 @@ func inspectMediaForInfo(ctx context.Context, file string, opts Options, pricing
 	track, err := chooseTrack(ctx, file, tracks, opts, nil)
 	if err != nil {
 		row.Status = "↷ sem fonte"
-		var unavailable *sourceTrackUnavailableError
-		if errors.As(err, &unavailable) {
-			row.Source = language.FormatOrdered(unavailable.languages)
-		} else {
-			row.Source = shortInfoError(err)
-		}
+		row.Source = shortInfoError(err)
 		return row, infoTotals{unavailable: 1}
 	}
 	cues, err := extractInfoCues(ctx, file, track.Index)

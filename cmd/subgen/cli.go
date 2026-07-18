@@ -17,7 +17,9 @@ import (
 	terminalui "github.com/antonioneris/subgen/internal/ui"
 )
 
-var version = "0.17.1"
+// version mirrors the latest published GitHub release for local builds.
+// Release builds override it from the v* tag through -ldflags.
+var version = "0.17.5"
 
 const defaultProvider = "deepseek"
 const defaultModel = "deepseek-v4-flash"

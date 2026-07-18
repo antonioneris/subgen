@@ -104,7 +104,8 @@ func runConfigWizard(path string, stdin io.Reader, stdout io.Writer) error {
 	if advanced {
 		fmt.Fprintln(stdout, "\n     Idiomas de origem por prioridade")
 		fmt.Fprintln(stdout, "     O primeiro disponível será usado; somente uma faixa será traduzida.")
-		fmt.Fprintln(stdout, "     Exemplo: en, fr, es  (use auto para perguntar quando nenhum for encontrado)")
+		fmt.Fprintln(stdout, "     Se nenhum existir, a melhor faixa textual disponível será usada automaticamente.")
+		fmt.Fprintln(stdout, "     Exemplo: en, fr, es  (use auto se não quiser definir prioridades)")
 		source, err := p.text("     Ordem", strings.Join(savedSourceLanguages(cfg), ", "))
 		if err != nil {
 			return err
